@@ -50,15 +50,16 @@
   )
 
 (defn app []
-  [:div {:style {:margin     "auto"
-                 :width      "1000px"}}
-   [:svg {:width 1000 :view-box "0 0 1000 1000"}
-    [:path {:fill "#ffaa00"
-            :d @path}]]
+  [:div {:style {:margin "auto"
+                 :width  "1000px"}}
+   [:h1 "SVG Path Editor"]
    (let [[width height] (dimensions @path)]
-     [:div 
-      [:p (str "Width: " width)]
-      [:p (str "Height: " height)]])])
+     [:div
+      [:p (str "Width: " width " Height: " height)]])
+   [:svg {:width    1000
+          :view-box "0 0 1000 1000"}
+    [:path {:fill "#ffaa00"
+            :d    @path}]]])
 
 (defn ^:dev/after-load start []
   (r/render [app]

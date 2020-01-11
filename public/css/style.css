@@ -3,27 +3,21 @@ body {
   background-image: linear-gradient(to bottom, #200933, #3d0b43);
   background-size: auto 100vh;
   background-position: top;
-
   position: relative;
   color: #ffcc00;
   text-shadow: 0 0 2px #100c0f, 0 0 3px #ffaa0099, 0 0 5px #ffaa0099, 0 0 10px #ffaa0099;
-  
 }
 
 h1 {
-  line-height: 0.2;
+  color: #61e2ff;
+  text-shadow: 0 0 2px #001716, 0 0 5px #03edf933, 0 0 10px #ffff6633;
+  font-style: italic;
+  line-height: 0;
 }
 
 h2 {
   color: #fc199a;
   text-shadow: 0 0 2px #393a33, 0 0 35px #ffffff44, 0 0 10px #fc199a, 0 0 2px #fc199a;
-
-}
-
-h3 {
-  color: #61e2ff;
-  text-shadow: 0 0 2px #001716, 0 0 5px #03edf933, 0 0 10px #ffff6633;
-  font-style: italic;
 }
 
 label {
