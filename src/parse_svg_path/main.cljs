@@ -17,39 +17,39 @@
    :close-path (set "Zz")})
 
 (s/def ::path
-       (s/cat :segment
-              (s/+
+       (s/+
+        (s/cat :segment
                (s/cat
                 :command (set "MmLlHhVvCcSsQqTtAaZz")
                 :params (s/* (set "0123456789 .-,"))))))
-
-(comment
-  (s/conform ::path (seq @textbox))
-  )
 
 (defn parse-commands 
   "Splits an SVG path string into a sequence of commands"
   [s]
   (str/split s #"(?=[A-Z])"))
 
-(defn parse-vals 
-  "Parses the command's parameters into a sequence of numbers"
-  [s]
-  (map js/parseFloat (re-seq #"[\d.]+" (subs s 1))))
-
-(defn parse-svg-path 
-  "Takes an SVG path string and outputs a seq of vectors
-   containing each command paired with its params"
-  [s]
-  (map (juxt first parse-vals) (parse-commands s)))
-
-(defn parse-svg-coords
-  [coords]
-  (->> coords
+(defn parse-params [v]
+  (->> v
+       (apply str)
        (re-seq #"[0-9\.\-\+]+")
-       (map js/parseFloat)
-       (partition 2)
-       (mapv vec)))
+       (map js/parseFloat)))
+
+(defn valid-segment? [{:keys [command params]}]
+  (case command
+    ("Z" "z") (= 0 (count (parse-params params)))
+    ("H" "h" "V" "v") (= 1 (count (parse-params params)))
+    ("M" "m" "T" "t" "L" "l") (= 2 (count (parse-params params)))
+    ("Q" "q" "S" "s") (= 4 (count (parse-params params)))
+    ("C" "c") (= 6 (count (parse-params params)))
+    ("A" "a") (= 7 (count (parse-params params)))))
+
+(defn valid-path? [s]
+  (every? #(valid-segment? (:segment %)) (s/conform ::path (seq s))))
+
+(comment
+   (count (parse-params ["8" "9" " " "6" "2" "9"]))
+    (every? #(valid-segment? (:segment %)) (s/conform ::path (seq @textbox)))
+  [{:segment {:command "M", :params ["8" "9" " " "6" "2" "9"]}} {:segment {:command "Q", :params ["8" "9" " " "6" "6" "3" " " "1" "1" "6" " " "6" "8" "4"]}} {:segment {:command "T", :params ["1" "7" "1" " " "7" "0" "5"]}} {:segment {:command "Q", :params ["2" "1" "5" " " "7" "0" "5" " " "2" "3" "7" " " "6" "8" "1"]}} {:segment {:command "T", :params ["2" "6" "0" " " "6" "3" "4"]}} {:segment {:command "Q", :params ["2" "6" "0" " " "6" "1" "9" " " "2" "3" "3" " " "4" "3" "4"]}} {:segment {:command "T", :params ["2" "0" "4" " " "2" "4" "4"]}} {:segment {:command "Q", :params ["2" "0" "1" " " "2" "3" "7" " " "1" "7" "5" " " "2" "3" "7"]}} {:segment {:command "Q", :params ["1" "5" "0" " " "2" "3" "7" " " "1" "4" "6" " " "2" "4" "4"]}} {:segment {:command "Q", :params ["1" "4" "4" " " "2" "4" "8" " " "1" "1" "7" " " "4" "3" "3"]}} {:segment {:command "T", :params ["8" "9" " " "6" "2" "9"]}} {:segment {:command "Z"}} {:segment {:command "M", :params ["9" "0" " " "8" "6"]}} {:segment {:command "Q", :params ["9" "0" " " "1" "2" "5" " " "1" "1" "6" " " "1" "4" "8"]}} {:segment {:command "T", :params ["1" "7" "7" " " "1" "7" "1"]}} {:segment {:command "Q", :params ["2" "1" "1" " " "1" "6" "9" " " "2" "3" "5" " " "1" "4" "6"]}} {:segment {:command "T", :params ["2" "5" "9" " " "8" "6"]}} {:segment {:command "Q", :params ["2" "5" "9" " " "4" "8" " " "2" "3" "5" " " "2" "5"]}} {:segment {:command "T", :params ["1" "7" "5" " " "1"]}} {:segment {:command "Q", :params ["1" "3" "8" " " "1" " " "1" "1" "4" " " "2" "4"]}} {:segment {:command "T", :params ["9" "0" " " "8" "6"]}} {:segment {:command "Z"}}])
 
 (defn svg-path
   ([svg]
@@ -57,7 +57,7 @@
     (->> svg
          (re-seq #"([MLQVHCZz])\s*(((([0-9\.\-]+)\,?){2}\s*){0,3})")
          (map (fn [[_ t c]]
-                [t (parse-svg-coords c)])))
+                [t (parse-params c)])))
     [0 0] [0 0]))
   ([[[type points :as seg] & more] p0 pc]
    (when seg
@@ -98,14 +98,13 @@
     (second params)))
 
 (defn dimensions [s]
-  (let [path (parse-svg-path s)
+  (let [path (svg-path s)
         x-vals (remove nil? (map x-val path))
         y-vals (remove nil? (map y-val path))]
     [(- (apply max x-vals) (apply min x-vals))
      (- (apply max y-vals) (apply min y-vals))]))
 
 (comment
-  (parse-svg-path @path)
   (svg-path @path)
   (update [23 56 23 45] 2 inc)
   (dimensions @path)
@@ -117,15 +116,16 @@
   [:div {:style {:margin "auto"
                  :width  "1000px"}}
    [:h1 "SVG Path Editor"]
-   (let [[width height] (dimensions @path)]
+   #_(let [[width height] (dimensions @path)]
      [:div
       [:p (str  width " x " height)]])
    [:textarea
     {:rows      (+ 2 (/ (count @path) 60))
      :cols      60
      :value     (str @textbox)
-     :on-change #(reset! textbox (-> % .-target .-value))}]
-   [:p (str "Valid path: " (s/valid? ::path (seq @textbox)))]
+     :on-change #(do (when (valid-path? @textbox)
+                       (reset! path (-> % .-target .-value)))
+                   (reset! textbox (-> % .-target .-value)))}]
    [:svg {:width    1000
           :view-box "0 0 1000 1000"}
     [:path {:fill "#ffaa00"
