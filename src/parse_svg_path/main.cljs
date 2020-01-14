@@ -1,7 +1,31 @@
 (ns parse-svg-path.main
   (:require
+   [clojure.spec.alpha :as s]
    [reagent.core :as r]
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [parse-svg-path.latex :as latex]))
+
+(defonce path (r/atom "M89 629Q89 663 116 684T171 705Q215 705 237 681T260 634Q260 619 233 434T204 244Q201 237 175 237Q150 237 146 244Q144 248 117 433T89 629ZM90 86Q90 125 116 148T177 171Q211 169 235 146T259 86Q259 48 235 25T175 1Q138 1 114 24T90 86Z"))
+(defonce textbox (r/atom @path))
+
+(def svg-path-commands
+  {:move-to (set "Mm")
+   :line-to (set "LlHhVv")
+   :cubic-bezier (set "CcSs")
+   :quadratic-bezier (set "QqTt")
+   :arc (set "Aa")
+   :close-path (set "Zz")})
+
+(s/def ::path
+       (s/cat :segment
+              (s/+
+               (s/cat
+                :command (set "MmLlHhVvCcSsQqTtAaZz")
+                :params (s/* (set "0123456789 .-,"))))))
+
+(comment
+  (s/conform ::path (seq @textbox))
+  )
 
 (defn parse-commands 
   "Splits an SVG path string into a sequence of commands"
@@ -31,30 +55,29 @@
   ([svg]
    (svg-path
     (->> svg
-         (re-seq #"([MLCZz])\s*(((([0-9\.\-]+)\,?){2}\s*){0,3})")
+         (re-seq #"([MLQVHCZz])\s*(((([0-9\.\-]+)\,?){2}\s*){0,3})")
          (map (fn [[_ t c]]
                 [t (parse-svg-coords c)])))
     [0 0] [0 0]))
   ([[[type points :as seg] & more] p0 pc]
    (when seg
-     (cond
-       (= "M" type)
+     (case type
+       "M"
        (let [p (first points)] (recur more p p))
-       (= "L" type)
+       ("L" "V" "H")
        (let [p (first points)]
          (lazy-seq (cons {:type   :line
                           :points [pc p]}
                          (svg-path more p0 p))))
-       (= "C" type)
+       ("C" "Q")
        (let [p (last points)]
          (lazy-seq (cons {:type   :bezier
                           :points (cons pc points)}
                          (svg-path more p0 p))))
-       (or (= "Z" type) (= "z" type))
+       ("Z" "z")
        (lazy-seq (cons {:type   :close
                         :points [pc p0]}
                        (svg-path more p0 p0)))
-       :else
        (str "Unsupported path segment type: " type)))))
 
 (defn all-vals [s]
@@ -81,14 +104,13 @@
     [(- (apply max x-vals) (apply min x-vals))
      (- (apply max y-vals) (apply min y-vals))]))
 
-(defonce path (r/atom "M132 523Q98 523 98 490V479L111 451Q186 293 220 178L228 154H196Q158 154 142 157T103 176Q92 183 81 194T62 215 53 227Q51 228 38 228 19 228 19 218 19 212 38 183T93 121 164 83Q171 81 389 81 549 81 553 82 573 89 573 110 573 141 541 152 535 154 472 154H408L405 171Q393 243 393 290 393 342 402 383T421 447 431 475Q431 492 417 507T381 522Q370 522 363 519T347 495 331 435Q330 426 330 391 330 342 339 286T357 194 367 154H269L268 158Q268 161 249 237T206 398 175 495Q164 523 132 523Z"))
-
 (comment
   (parse-svg-path @path)
-  
+  (svg-path @path)
   (update [23 56 23 45] 2 inc)
   (dimensions @path)
   '(["M" (132 523)] ["Q" (98 523 98 490)] ["V" (479)] ["L" (111 451)] ["Q" (186 293 220 178)] ["L" (228 154)] ["H" (196)] ["Q" (158 154 142 157)] ["T" (103 176)] ["Q" (92 183 81 194)] ["T" (62 215 53 227)] ["Q" (51 228 38 228 19 228 19 218 19 212 38 183)] ["T" (93 121 164 83)] ["Q" (171 81 389 81 549 81 553 82 573 89 573 110 573 141 541 152 535 154 472 154)] ["H" (408)] ["L" (405 171)] ["Q" (393 243 393 290 393 342 402 383)] ["T" (421 447 431 475)] ["Q" (431 492 417 507)] ["T" (381 522)] ["Q" (370 522 363 519)] ["T" (347 495 331 435)] ["Q" (330 426 330 391 330 342 339 286)] ["T" (357 194 367 154)] ["H" (269)] ["L" (268 158)] ["Q" (268 161 249 237)] ["T" (206 398 175 495)] ["Q" (164 523 132 523)] ["Z" ()])
+  (vals latex/l)
   )
 
 (defn app []
@@ -101,13 +123,13 @@
    [:textarea
     {:rows      (+ 2 (/ (count @path) 60))
      :cols      60
-     :value     (str @path)
-     :read-only true}]
+     :value     (str @textbox)
+     :on-change #(reset! textbox (-> % .-target .-value))}]
+   [:p (str "Valid path: " (s/valid? ::path (seq @textbox)))]
    [:svg {:width    1000
           :view-box "0 0 1000 1000"}
     [:path {:fill "#ffaa00"
-            :d    @path}]]
-   ])
+            :d    @path}]]])
 
 (defn ^:dev/after-load start []
   (r/render [app]
